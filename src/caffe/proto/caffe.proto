@@ -387,6 +387,7 @@ message LayerParameter {
   optional LRNParameter lrn_param = 118;
   optional MemoryDataParameter memory_data_param = 119;
   optional MVNParameter mvn_param = 120;
+  optional NormalizeParameter normalize_param = 301;
   optional ParameterParameter parameter_param = 145;
   optional PoolingParameter pooling_param = 121;
   optional PowerParameter power_param = 122;
@@ -889,6 +890,12 @@ message MVNParameter {
 
   // Epsilon for not dividing by zero while normalizing variance
   optional float eps = 3 [default = 1e-9];
+}
+
+message NormalizeParameter {
+  optional string normalize_type = 1 [default = "L2"];
+  optional bool fix_gradient = 2 [default = false];
+  optional bool bp_norm = 3 [default = false];
 }
 
 message ParameterParameter {
