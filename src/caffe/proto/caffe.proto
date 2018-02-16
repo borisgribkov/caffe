@@ -361,6 +361,7 @@ message LayerParameter {
   // engine parameter for selecting the implementation.
   // The default for the engine is set by the ENGINE switch at compile-time.
   optional AccuracyParameter accuracy_param = 102;
+  optional AddAngularMarginParameter add_angular_margin_param = 302;
   optional ArgMaxParameter argmax_param = 103;
   optional BatchNormParameter batch_norm_param = 139;
   optional BiasParameter bias_param = 141;
@@ -478,6 +479,10 @@ message AccuracyParameter {
 
   // If specified, ignore instances with the given label.
   optional int32 ignore_label = 3;
+}
+
+message AddAngularMarginParameter {
+  optional float angle = 1 [default = 0.0];
 }
 
 message ArgMaxParameter {
