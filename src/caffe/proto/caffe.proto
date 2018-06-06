@@ -501,6 +501,7 @@ message ArgMaxParameter {
 message CombinedAngularMarginParameter {
   optional float angle = 1 [default = 0.0];
   optional float margin = 2 [default = 0.0];
+  optional float scale = 3 [default = 1.0];
 }
 
 message ConcatParameter {

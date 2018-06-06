@@ -39,6 +39,7 @@ class CombinedAngularMarginLayer : public Layer<Dtype> {
 
   Dtype angle_;
   Dtype margin_;
+  Dtype scale_;
 };
 
 }  // namespace caffe

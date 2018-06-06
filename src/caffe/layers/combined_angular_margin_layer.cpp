@@ -11,6 +11,7 @@ namespace caffe {
     const CombinedAngularMarginParameter& param = this->layer_param_.combined_angular_margin_param();
     angle_ = param.angle();
     margin_ = param.margin();
+    scale_ = param.scale();
   }
 
   template <typename Dtype>
@@ -37,10 +38,11 @@ void CombinedAngularMarginLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& 
   
   for (int i = 0; i < num; ++i) {
     int gt = static_cast<int>(label_data[i]);
-    Dtype bottom_val = bottom_data[i * dim + gt];
-    Dtype sin_t = std::sqrt(1 - bottom_val * bottom_val);
-    top_data[i * dim + gt] = bottom_val * cos_m - sin_t * sin_m;
+    Dtype cos_t = bottom_data[i * dim + gt] / scale_;
+    Dtype sin_t = std::sqrt(Dtype(1) - cos_t * cos_t);
+    top_data[i * dim + gt] = cos_t * cos_m - sin_t * sin_m;
     top_data[i * dim + gt] -= margin_;
+    top_data[i * dim + gt] *= scale_;
   }
 }
 
@@ -61,9 +63,9 @@ void CombinedAngularMarginLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>&
   caffe_copy(count, top_diff, bottom_diff);
   for (int i = 0; i < num; ++i) {
     int gt = static_cast<int>(label_data[i]);
-    Dtype bottom_val = bottom_data[i * dim + gt];
-    Dtype sin_t = std::sqrt(1 - bottom_val * bottom_val);
-    bottom_diff[i * dim + gt] *= cos_m + sin_m * bottom_val / sin_t;
+    Dtype cos_t = bottom_data[i * dim + gt] / scale_;
+    Dtype sin_t = std::sqrt(Dtype(1) - cos_t * cos_t);
+    bottom_diff[i * dim + gt] *= cos_m + sin_m * cos_t / sin_t;
   }
 }
 
