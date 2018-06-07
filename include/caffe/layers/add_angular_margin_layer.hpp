@@ -38,6 +38,7 @@ class AddAngularMarginLayer : public Layer<Dtype> {
       const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom);
 
   Dtype angle_;
+  Dtype scale_;
 };
 
 }  // namespace caffe

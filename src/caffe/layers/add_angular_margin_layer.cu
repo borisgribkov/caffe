@@ -8,32 +8,32 @@ namespace caffe {
 
   template <typename Dtype>
   __global__ void AddAngularMarginForward(const int n, const int dim, const Dtype* label,
-                                                 const Dtype* bottom_data, Dtype* top_data, Dtype angle) {
+                                                 const Dtype* bottom_data, Dtype* top_data, Dtype angle, Dtype scale) {
     Dtype cos_m = cosf(angle);
     Dtype sin_m = sinf(angle);
     Dtype threshold = cosf(M_PI - angle);
     Dtype mm = sinf(M_PI - angle) * angle;
     CUDA_KERNEL_LOOP(index, n) {
       int gt = static_cast<int>(label[index]);
-      Dtype bottom_val = bottom_data[index * dim + gt];
+      Dtype bottom_val = bottom_data[index * dim + gt] / scale;
       if(bottom_val > threshold) {
         Dtype sin_t = sqrtf(1 - bottom_val * bottom_val);
-        top_data[index * dim + gt] = bottom_val * cos_m - sin_t * sin_m;
+        top_data[index * dim + gt] = (bottom_val * cos_m - sin_t * sin_m) * scale;
       } else {
-        top_data[index * dim + gt] = bottom_val - mm;
+        top_data[index * dim + gt] = (bottom_val - mm) * scale;
       }
     }
   }
 
   template <typename Dtype>
   __global__ void AddAngularMarginBackward(const int n, const int dim, const Dtype* label,
-                                                 const Dtype* bottom_data, Dtype* bottom_diff, Dtype angle) {
+                                                 const Dtype* bottom_data, Dtype* bottom_diff, Dtype angle, Dtype scale) {
     Dtype cos_m = cosf(angle);
     Dtype sin_m = sinf(angle);
     Dtype threshold = cosf(M_PI - angle);
     CUDA_KERNEL_LOOP(index, n) {
       int gt = static_cast<int>(label[index]);
-      Dtype bottom_val = bottom_data[index * dim + gt];
+      Dtype bottom_val = bottom_data[index * dim + gt] / scale;
       if(bottom_val > threshold) {
         Dtype sin_t = sqrtf(1 - bottom_val * bottom_val);
         bottom_diff[index * dim + gt] *= cos_m + sin_m * bottom_val / sin_t;
@@ -54,7 +54,7 @@ namespace caffe {
     caffe_copy(count, bottom_data, top_data);
     // NOLINT_NEXT_LINE(whitespace/operators)
     AddAngularMarginForward<Dtype> << <CAFFE_GET_BLOCKS(num), CAFFE_CUDA_NUM_THREADS >> > (
-      num, dim, label_data, bottom_data, top_data, angle_);
+      num, dim, label_data, bottom_data, top_data, angle_, scale_);
     CUDA_POST_KERNEL_CHECK;
   }
 
@@ -73,7 +73,7 @@ namespace caffe {
     caffe_copy(count, top_diff, bottom_diff);
     // NOLINT_NEXT_LINE(whitespace/operators)
     AddAngularMarginBackward<Dtype> << <CAFFE_GET_BLOCKS(num), CAFFE_CUDA_NUM_THREADS >> > (
-      num, dim, label_data, bottom_data, bottom_diff, angle_);
+      num, dim, label_data, bottom_data, bottom_diff, angle_, scale_);
     CUDA_POST_KERNEL_CHECK;
   }
 

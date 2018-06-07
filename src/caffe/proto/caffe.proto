@@ -485,6 +485,7 @@ message AccuracyParameter {
 
 message AddAngularMarginParameter {
   optional float angle = 1 [default = 0.0];
+  optional float scale = 2 [default = 1.0];
 }
 
 message ArgMaxParameter {

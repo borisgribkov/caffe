@@ -10,6 +10,7 @@ namespace caffe {
                                                     const vector<Blob<Dtype>*>& top) {
     const AddAngularMarginParameter& param = this->layer_param_.add_angular_margin_param();
     angle_ = param.angle();
+    scale_ = param.scale();
   }
 
   template <typename Dtype>
@@ -38,13 +39,14 @@ void AddAngularMarginLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& botto
   
   for (int i = 0; i < num; ++i) {
     int gt = static_cast<int>(label_data[i]);
-    Dtype bottom_val = bottom_data[i * dim + gt];
+    Dtype bottom_val = bottom_data[i * dim + gt] / scale_;
     if(bottom_val > threshold) {
       Dtype sin_t = std::sqrt(1 - bottom_val * bottom_val);
       top_data[i * dim + gt] = bottom_val * cos_m - sin_t * sin_m;
     } else {
       top_data[i * dim + gt] = bottom_val - mm;
     }
+    top_data[i * dim + gt] *= scale_;
   }
 }
 
@@ -66,7 +68,7 @@ void AddAngularMarginLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& top,
   caffe_copy(count, top_diff, bottom_diff);
   for (int i = 0; i < num; ++i) {
     int gt = static_cast<int>(label_data[i]);
-    Dtype bottom_val = bottom_data[i * dim + gt];
+    Dtype bottom_val = bottom_data[i * dim + gt] / scale_;
     if(bottom_val > threshold) {
       Dtype sin_t = std::sqrt(1 - bottom_val * bottom_val);
       bottom_diff[i * dim + gt] *= cos_m + sin_m * bottom_val / sin_t;
