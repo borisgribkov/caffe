@@ -34,10 +34,6 @@ void KLLossLayer<Dtype>::Forward_gpu(
 template <typename Dtype>
 void KLLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const vector<bool>& propagate_down, const vector<Blob<Dtype>*>& bottom) {
-  if (propagate_down[1]) {
-    LOG(FATAL) << this->type()
-               << " Layer cannot backpropagate to target distribution yet.";
-  }
   if (propagate_down[0]) {
     Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
     const Dtype* prob1 = prob_.gpu_data();
