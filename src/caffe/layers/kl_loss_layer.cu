@@ -25,7 +25,7 @@ void KLLossLayer<Dtype>::Forward_gpu(
   Dtype* temp = bottom[0]->mutable_gpu_diff();
 
   Dtype loss = 0;
-  kl_forward_gpu<Dtype><<<CAFFE_GET_BLOCKS(N),CAFFE_CUDA_NUM_THREADS>>>(prob_.count(), prob1, prob2, temp);
+  kl_forward_gpu<Dtype><<<CAFFE_GET_BLOCKS(prob_.count()),CAFFE_CUDA_NUM_THREADS>>>(prob_.count(), prob1, prob2, temp);
   caffe_gpu_dot(prob_.count(), temp, prob2, &loss);
 
   top[0]->mutable_cpu_data()[0] = loss;
@@ -45,7 +45,7 @@ void KLLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     
     caffe_gpu_sub(prob_.count(), prob1, prob2, bottom_diff);
     Dtype loss_weight = top[0]->cpu_diff()[0]
-    caffe_gpu_scal(N, loss_weight , bottom_diff);
+    caffe_gpu_scal(prob_.count(), loss_weight , bottom_diff);
   }
 }
 
