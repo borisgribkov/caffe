@@ -44,7 +44,7 @@ void KLLossLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& top,
     const Dtype* prob2 = bottom[1]->gpu_data();
     
     caffe_gpu_sub(prob_.count(), prob1, prob2, bottom_diff);
-    Dtype loss_weight = top[0]->cpu_diff()[0]
+    Dtype loss_weight = top[0]->cpu_diff()[0];
     caffe_gpu_scal(prob_.count(), loss_weight , bottom_diff);
   }
 }
