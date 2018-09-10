@@ -365,6 +365,7 @@ message LayerParameter {
   optional ArgMaxParameter argmax_param = 103;
   optional BatchNormParameter batch_norm_param = 139;
   optional BiasParameter bias_param = 141;
+  optional ChannelScaleParameter channel_scale_param = 305;
   optional CombinedAngularMarginParameter combined_angular_margin_param = 303;
   optional ConcatParameter concat_param = 104;
   optional ContrastiveLossParameter contrastive_loss_param = 105;
@@ -497,6 +498,16 @@ message ArgMaxParameter {
   // By default ArgMaxLayer maximizes over the flattened trailing dimensions
   // for each index of the first / num dimension.
   optional int32 axis = 3;
+}
+
+message ChannelScaleParameter{
+  optional bool do_forward = 1 [default = true];
+  optional bool do_backward_feature = 2 [default = true];
+  optional bool do_backward_scale = 3 [default = true];
+  optional bool global_scale = 4 [default = false];
+  optional float max_global_scale = 5 [default = 1000.0];
+  optional float min_global_scale = 6 [default = 0.0];
+  optional float init_global_scale = 7 [default = 1.0];
 }
 
 message CombinedAngularMarginParameter {
