@@ -392,6 +392,7 @@ message LayerParameter {
   optional MVNParameter mvn_param = 120;
   optional NormalizeParameter normalize_param = 301;
   optional ParameterParameter parameter_param = 145;
+  optional PlanetLossParameter planet_loss_param = 306;
   optional PoolingParameter pooling_param = 121;
   optional PowerParameter power_param = 122;
   optional PReLUParameter prelu_param = 131;
@@ -406,6 +407,7 @@ message LayerParameter {
   optional SoftmaxParameter softmax_param = 125;
   optional SPPParameter spp_param = 132;
   optional SliceParameter slice_param = 126;
+  optional SunLossParameter sun_loss_param = 307;
   optional TanHParameter tanh_param = 127;
   optional ThresholdParameter threshold_param = 128;
   optional TileParameter tile_param = 138;
@@ -1449,4 +1451,16 @@ message PReLUParameter {
   optional FillerParameter filler = 1;
   // Whether or not slope parameters are shared across channels.
   optional bool channel_shared = 2 [default = false];
+}
+
+message PlanetLossParameter {
+  optional int32 num_output = 1 [default = 0];
+  optional float alpha = 2 [default = 0.0];
+  optional int32 axis = 3 [default = 1];
+  optional FillerParameter p_filler = 4;
+}
+
+message SunLossParameter {
+  optional float beta = 2 [default = 0.0];
+  optional int32 axis = 3 [default = 1];
 }
