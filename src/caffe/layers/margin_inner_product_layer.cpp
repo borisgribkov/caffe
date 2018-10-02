@@ -77,8 +77,10 @@ void MarginInnerProductLayer<Dtype>::Reshape(const vector<Blob<Dtype>*>& bottom,
   // common temp variables
   vector<int> shape_1_X_M(1, M_);
   x_norm_.Reshape(shape_1_X_M);
+  ran_.Reshape(shape_1_X_M); 
   sign_0_.Reshape(top_shape);
   cos_theta_.Reshape(top_shape);
+  margin_top_data_.Reshape(top_shape);
 
   // optional temp variables
   switch (type_) {
@@ -121,9 +123,9 @@ void MarginInnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bot
   Dtype* norm_weight = this->blobs_[0]->mutable_cpu_data();
   Dtype temp_norm = (Dtype)0.;
   for (int i = 0; i < N_; i++) {
-  	temp_norm = caffe_cpu_dot(K_, norm_weight + i * K_, norm_weight + i * K_);
-  	temp_norm = (Dtype)1./sqrt(temp_norm);
-  	caffe_scal(K_, temp_norm, norm_weight + i * K_);
+    temp_norm = caffe_cpu_dot(K_, norm_weight + i * K_, norm_weight + i * K_);
+    temp_norm = (Dtype)1./sqrt(temp_norm);
+    caffe_scal(K_, temp_norm, norm_weight + i * K_);
   }
 
   /************************* common variables *************************/
@@ -191,6 +193,8 @@ void MarginInnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bot
   Dtype* top_data = top[0]->mutable_cpu_data();
   caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasTrans, M_, N_, K_, (Dtype)1.,
       bottom_data, weight, (Dtype)0., top_data);
+  caffe_cpu_gemm<Dtype>(CblasNoTrans, CblasTrans, M_, N_, K_, (Dtype)1.,
+      bottom_data, weight, (Dtype)0., margin_top_data_.mutable_cpu_data());
   const Dtype* label = bottom[1]->cpu_data();
   const Dtype* x_norm_data = x_norm_.cpu_data();
     switch (type_) {
@@ -198,8 +202,8 @@ void MarginInnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bot
     break;
   }
   case MarginInnerProductParameter_MarginType_DOUBLE: {
-  	const Dtype* sign_0_data = sign_0_.cpu_data();
-  	const Dtype* cos_theta_quadratic_data = cos_theta_quadratic_.cpu_data();
+    const Dtype* sign_0_data = sign_0_.cpu_data();
+    const Dtype* cos_theta_quadratic_data = cos_theta_quadratic_.cpu_data();
     // the label[i]_th top_data
     for (int i = 0; i < M_; i++) {
       const int label_value = static_cast<int>(label[i]);
@@ -215,7 +219,7 @@ void MarginInnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bot
     break;
   }
   case MarginInnerProductParameter_MarginType_TRIPLE: {
-  	const Dtype* sign_1_data = sign_1_.cpu_data();
+    const Dtype* sign_1_data = sign_1_.cpu_data();
     const Dtype* sign_2_data = sign_2_.cpu_data();
     const Dtype* cos_theta_data = cos_theta_.cpu_data();
     const Dtype* cos_theta_cubic_data = cos_theta_cubic_.cpu_data();
@@ -236,7 +240,7 @@ void MarginInnerProductLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bot
     break;
   }
   case MarginInnerProductParameter_MarginType_QUADRUPLE: {
-  	const Dtype* sign_3_data = sign_3_.cpu_data();
+    const Dtype* sign_3_data = sign_3_.cpu_data();
     const Dtype* sign_4_data = sign_4_.cpu_data();
     const Dtype* cos_theta_quadratic_data = cos_theta_quadratic_.cpu_data();
     const Dtype* cos_theta_quartic_data = cos_theta_quartic_.cpu_data();
@@ -271,16 +275,12 @@ void MarginInnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& to
   const Dtype* bottom_data = bottom[0]->cpu_data();
   const Dtype* label = bottom[1]->cpu_data();
   const Dtype* weight = this->blobs_[0]->cpu_data();
- 
-  // Gradient with respect to weight
-  if (this->param_propagate_down_[0]) {
-    caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, N_, K_, M_, (Dtype)1.,
-        top_diff, bottom_data, (Dtype)1., this->blobs_[0]->mutable_cpu_diff());
-  }
-  
+  Dtype* m_weight = this->blobs_[0]->mutable_cpu_data(); 
+  Dtype* m_weight_diff = this->blobs_[0]->mutable_gpu_diff(); 
+  Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
   // Gradient with respect to bottom data
   if (propagate_down[0]) {
-    Dtype* bottom_diff = bottom[0]->mutable_cpu_diff();
+
     const Dtype* x_norm_data = x_norm_.cpu_data();
     caffe_set(M_ * K_, Dtype(0), bottom_diff);
     switch (type_) {
@@ -400,6 +400,72 @@ void MarginInnerProductLayer<Dtype>::Backward_cpu(const vector<Blob<Dtype>*>& to
       LOG(FATAL) << "Unknown margin type.";
     }
     }
+  }
+  
+  // Easy triplet && semihard example
+  Dtype* top_data = top[0]->mutable_cpu_data();
+  const bool triplet_flag = this->layer_param_.margin_inner_product_param().triplet();  
+  const bool semihard_flag = this->layer_param_.margin_inner_product_param().semihard();
+  const bool hard_flag = (type_ != MarginInnerProductParameter_MarginType_SINGLE); 
+  // Gradient with respect to weight
+  if (this->param_propagate_down_[0]) {
+  if (triplet_flag)
+  {
+    //if triplet,set weight to feature
+    for (int i = 0; i < M_; i++) // M_*K_
+    {
+      int label_i = int(label[i]);
+      int ran_flag = caffe_rng_rand() % int(10);
+      if (ran_flag > 4)
+        caffe_copy(K_,(Dtype*)&bottom_data[i],(Dtype*)&m_weight[label_i]);
+    }
+    for (int n = 0; n < N_; n++)  // N_*K_
+    {
+      for (int k = 0; k < K_; k++)
+        m_weight_diff[n*K_+k] = Dtype(0); 
+    }
+  }
+  else
+  {
+    caffe_cpu_gemm<Dtype>(CblasTrans, CblasNoTrans, N_, K_, M_, (Dtype)1.,
+      top_diff, bottom_data, (Dtype)1., this->blobs_[0]->mutable_cpu_diff());
+  }
+  }
+  if (propagate_down[0]) {
+  // semihard example
+  if (semihard_flag)
+  {
+    for (int m = 0; m < M_; m++)
+    {
+      int argmax1 = 0; Dtype max1 = Dtype(-2);
+      int argmax2 = 0; Dtype max2 = Dtype(-2); 
+      for (int n = 0; n < N_; n++)
+      {
+        if (max1 < top_data[m*N_+n])
+        {
+          max1 = top_data[n*N_+n]; 
+          argmax1 = n; 
+        }
+        if (max2 < margin_top_data_.cpu_data()[m*N_+n])
+        {
+          max2 = margin_top_data_.cpu_data()[m*N_+n];
+          argmax2 = n; 
+        }
+      }
+      // easy example
+      if (int(label[m]) == argmax1)
+      {
+        for (int k = 0; k < K_; k++)
+          bottom_diff[m*K_+k] = Dtype(0);         
+      }
+      else if (int(label[m]) != argmax2 && hard_flag) // hard example
+      {
+        for (int k = 0; k < K_; k++)
+          bottom_diff[m*K_+k] = Dtype(0); 
+      }
+      // semihard example
+    }
+  }
   }
 }
 

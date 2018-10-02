@@ -10,17 +10,77 @@
 
 namespace caffe {
 template <typename Dtype>
+__global__ void Set_semihard_gpu(int nthreads, const int N_, const int K_, Dtype* bottom_diff, const Dtype* top_data, 
+                  const Dtype* margin_top_data, const Dtype* label,bool hard_flag) {
+  CUDA_KERNEL_LOOP(index, nthreads) {
+
+  int argmax1; Dtype max1 = Dtype(-2); 
+  int argmax2; Dtype max2 = Dtype(-2);
+
+  int label_i = static_cast<int>(label[index]);
+  
+  for (int n = 0; n < N_; n++)
+  {
+    if (max1 < top_data[index*N_+n])
+    {
+      max1 = top_data[index*N_+n];
+      argmax1 = n; 
+    }
+    if (max2 < margin_top_data[index*N_+n])
+    {
+      max2 = margin_top_data[index*N_+n]; 
+      argmax2 = n; 
+    }
+  }
+  if (label_i == argmax1)  // easy example
+  {
+    for (int k = 0; k < K_; k++) {
+      bottom_diff[index * K_ + k] = Dtype(0);
+    }     
+  }
+  else if (label_i != argmax2 && hard_flag) // hard example
+  {
+    for (int k = 0; k < K_; k++) {
+      bottom_diff[index * K_ + k] = Dtype(0); 
+    }       
+  } 
+  } 
+}   
+
+template <typename Dtype>
+__global__ void Set_weight_gpu(int nthreads, const int K_, Dtype* m_weight,const Dtype* bottom_data,const Dtype* label,const int* ran) {
+  CUDA_KERNEL_LOOP(index, nthreads) {
+  const int label_i = static_cast<int>(label[index]); 
+  int ran_flag = ran[index];
+  if (ran_flag > 4)
+    for (int i = 0; i < K_; i++) {
+      m_weight[label_i * K_ + i] = bottom_data[index * K_ + i];
+    }
+  }
+}   
+  
+template <typename Dtype>
+__global__ void Set_weight_diff_gpu(int nthreads, const int K_,
+          Dtype* m_weight_diff) {
+  CUDA_KERNEL_LOOP(index, nthreads) {
+    for (int i = 0; i < K_; i++) {
+      m_weight_diff[index * K_ + i] = Dtype(0);
+    }
+  }
+} 
+
+template <typename Dtype>
 __global__ void Weight_norm_gpu(int nthreads, const int K_,
           Dtype* weight) {
   CUDA_KERNEL_LOOP(index, nthreads) {
-  	Dtype sum_sqaure = 0.;
-  	for (int i = 0; i < K_; i++) {
-  	  sum_sqaure += weight[index * K_ + i] * weight[index * K_ + i];
-  	}
-  	sum_sqaure = sqrt(sum_sqaure);
+    Dtype sum_sqaure = 0.;
     for (int i = 0; i < K_; i++) {
-  	  weight[index * K_ + i] = weight[index * K_ + i] / sum_sqaure;
-  	}
+      sum_sqaure += weight[index * K_ + i] * weight[index * K_ + i];
+    }
+    sum_sqaure = sqrt(sum_sqaure);
+    for (int i = 0; i < K_; i++) {
+      weight[index * K_ + i] = weight[index * K_ + i] / sum_sqaure;
+    }
   }
 }
 
@@ -41,7 +101,10 @@ __global__ void Compute_cos_theta_gpu(int nthreads, const int N_,
           const Dtype* x_norm, Dtype* cos_theta) {
   CUDA_KERNEL_LOOP(index, nthreads) {
     const int i = index / N_;
+    if (x_norm[i] > 1e-3)
     cos_theta[index] = cos_theta[index] / x_norm[i];
+  else 
+    cos_theta[index] = 1;
   }
 }
 
@@ -54,7 +117,7 @@ __global__ void Compute_sign_1_gpu(int nthreads, const Dtype* cos_theta, Dtype* 
 
 template <typename Dtype>
 __global__ void Compute_sign_2_gpu(int nthreads, const Dtype* sign_0, 
-	      const Dtype* sign_1, Dtype* sign_2) {
+        const Dtype* sign_1, Dtype* sign_2) {
   CUDA_KERNEL_LOOP(index, nthreads) {
     sign_2[index] = sign_0[index] * ((Dtype)1. + sign_1[index]) - (Dtype)2.;
   }
@@ -62,7 +125,7 @@ __global__ void Compute_sign_2_gpu(int nthreads, const Dtype* sign_0,
 
 template <typename Dtype>
 __global__ void Compute_sign_3_gpu(int nthreads, const Dtype* sign_0, 
-	      const Dtype* cos_theta_quadratic, Dtype* sign_3) {
+        const Dtype* cos_theta_quadratic, Dtype* sign_3) {
   CUDA_KERNEL_LOOP(index, nthreads) {
     sign_3[index] = sign_0[index] * ((Dtype)2. * cos_theta_quadratic[index] - (Dtype)1.);
   }
@@ -70,7 +133,7 @@ __global__ void Compute_sign_3_gpu(int nthreads, const Dtype* sign_0,
 
 template <typename Dtype>
 __global__ void Compute_sign_4_gpu(int nthreads, const Dtype* sign_0, 
-	      const Dtype* sign_3, Dtype* sign_4) {
+        const Dtype* sign_3, Dtype* sign_4) {
   CUDA_KERNEL_LOOP(index, nthreads) {
     sign_4[index] = (Dtype)2. * sign_0[index] + sign_3[index] - (Dtype)3.;
   }
@@ -87,9 +150,14 @@ __global__ void Margin_double_forward_gpu(int nthreads, const int N_, Dtype lamb
     const int label_value = static_cast<int>(label[i]);
     if (label_value == j) {
       top[index] *= lambda;
+    if (x_norm[i] > 1e-3)
+    {
       top[index] += x_norm[i] * ((Dtype)2. * sign_0[index] * cos_theta_quadratic[index] - 
-      	                         (Dtype)1.);
+                   (Dtype)1.);
       top[index] /= ((Dtype)1. + lambda);
+    }
+    else
+      top[index] = (Dtype)0.;
     }
   }
 }
@@ -107,7 +175,7 @@ __global__ void Margin_triple_forward_gpu(int nthreads, const int N_, Dtype lamb
     if (label_value == j) {
       top[index] *= lambda;
       top[index] += x_norm[i] * (sign_1[index] * ((Dtype)4. * cos_theta_cubic[index] - 
-      	                        (Dtype)3. * cos_theta[index]) + sign_2[index]);
+                                (Dtype)3. * cos_theta[index]) + sign_2[index]);
       top[index] /= ((Dtype)1. + lambda);
     }
   }
@@ -127,7 +195,7 @@ __global__ void Margin_quadruple_forward_gpu(int nthreads, const int N_, Dtype l
     if (label_value == j) {
       top[index] *= lambda;
       top[index] += x_norm[i] * (sign_3[index] * ((Dtype)8. * cos_theta_quartic[index] - 
-      	            (Dtype)8. * cos_theta_quadratic[index] + (Dtype)1.) + sign_4[index]);
+                    (Dtype)8. * cos_theta_quadratic[index] + (Dtype)1.) + sign_4[index]);
       top[index] /= ((Dtype)1. + lambda);
     }
   }
@@ -145,17 +213,25 @@ __global__ void Margin_bottom_double_backward_gpu(int nthreads, const int N_, co
     const int label_value = static_cast<int>(label[i]);
     for (int n = 0; n < N_; n++) {
       if (label_value != n) {
-        bottom_diff[index] += top_diff[i * N_ + n] * weight[n * K_ + j];
+        if (x_norm[i] > 1e-3)
+      bottom_diff[index] += top_diff[i * N_ + n] * weight[n * K_ + j];
+    else
+      bottom_diff[index] = (Dtype)0.;
       } else {
-        Dtype coeff_w = (Dtype)4. * sign_0[i * N_ + n] * cos_theta[i * N_ + n];
-        Dtype coeff_x = - (Dtype)1./ x_norm[i] * ((Dtype)2. * sign_0[i * N_ + n] *  
-                     cos_theta_quadratic[i * N_ + n] + (Dtype)1.);
-        Dtype coeff_norm = sqrt(coeff_w * coeff_w + coeff_x * coeff_x);
-        coeff_w = coeff_w / coeff_norm;
-        coeff_x = coeff_x / coeff_norm;
-        bottom_diff[index] += (Dtype)1./ ((Dtype)1. + lambda) * top_diff[i * N_ + n] * 
-                              (coeff_w * weight[n * K_ + j] + coeff_x * bottom[index]);
-        bottom_diff[index] += lambda / ((Dtype)1. + lambda) * top_diff[i * N_ + n] * weight[n * K_ + j];
+        if (x_norm[i] > 1e-3)
+    {
+      Dtype coeff_w = (Dtype)4. * sign_0[i * N_ + n] * cos_theta[i * N_ + n];
+      Dtype coeff_x = - (Dtype)1./ x_norm[i] * ((Dtype)2. * sign_0[i * N_ + n] *  
+              cos_theta_quadratic[i * N_ + n] + (Dtype)1.);
+      Dtype coeff_norm = sqrt(coeff_w * coeff_w + coeff_x * coeff_x);
+      coeff_w = coeff_w / coeff_norm;
+      coeff_x = coeff_x / coeff_norm;
+      bottom_diff[index] += (Dtype)1./ ((Dtype)1. + lambda) * top_diff[i * N_ + n] * 
+                  (coeff_w * weight[n * K_ + j] + coeff_x * bottom[index]);
+      bottom_diff[index] += lambda / ((Dtype)1. + lambda) * top_diff[i * N_ + n] * weight[n * K_ + j];
+    }
+    else
+      bottom_diff[index] = (Dtype)0.;
       }
     }
   }
@@ -302,6 +378,8 @@ void MarginInnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bot
   /************************* Forward *************************/
   caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, M_, N_, K_, (Dtype)1.,
       bottom_data, weight, (Dtype)0., top_data);
+  caffe_gpu_gemm<Dtype>(CblasNoTrans, CblasTrans, M_, N_, K_, (Dtype)1.,
+      bottom_data, weight, (Dtype)0., margin_top_data_.mutable_gpu_data());
   switch (type_) {
   case MarginInnerProductParameter_MarginType_SINGLE:
     break;
@@ -309,7 +387,7 @@ void MarginInnerProductLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bot
     // caffe_gpu_memcpy(M_ * N_, cos_theta_.gpu_data(), top_data);
     Margin_double_forward_gpu<Dtype><<<CAFFE_GET_BLOCKS(nthreads),
       CAFFE_CUDA_NUM_THREADS>>>(nthreads, N_, lambda_, label, x_norm_.gpu_data(), 
-      	                        sign_0_.gpu_data(), cos_theta_quadratic_.gpu_data(), top_data);
+                                sign_0_.gpu_data(), cos_theta_quadratic_.gpu_data(), top_data);
     break;
   case MarginInnerProductParameter_MarginType_TRIPLE:
     Margin_triple_forward_gpu<Dtype><<<CAFFE_GET_BLOCKS(nthreads),
@@ -337,15 +415,12 @@ void MarginInnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& to
   const Dtype* bottom_data = bottom[0]->gpu_data();
   const Dtype* label = bottom[1]->gpu_data();
   const Dtype* weight = this->blobs_[0]->gpu_data();
-
-  if (this->param_propagate_down_[0]) {
-    // Gradient with respect to weight
-    caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, N_, K_, M_, (Dtype)1.,
-        top_diff, bottom_data, (Dtype)1., this->blobs_[0]->mutable_gpu_diff());
-  }
-
+  Dtype* m_weight = this->blobs_[0]->mutable_gpu_data(); 
+  Dtype* m_weight_diff = this->blobs_[0]->mutable_gpu_diff(); 
+  Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
+  
   if (propagate_down[0]) {
-    Dtype* bottom_diff = bottom[0]->mutable_gpu_diff();
+
     // Gradient with respect to bottom data
     int nthreads = M_ * K_;
     switch (type_) {
@@ -379,6 +454,39 @@ void MarginInnerProductLayer<Dtype>::Backward_gpu(const vector<Blob<Dtype>*>& to
     default:
       LOG(FATAL) << "Unknown margin type.";
     }
+  }
+  
+  const Dtype* top_data = top[0]->gpu_data();   
+  const bool triplet_flag = this->layer_param_.margin_inner_product_param().triplet(); 
+  const bool semihard_flag = this->layer_param_.margin_inner_product_param().semihard(); 
+  const bool hard_flag = (type_ != MarginInnerProductParameter_MarginType_SINGLE);
+  
+  if (this->param_propagate_down_[0]) {
+    // Gradient with respect to weight
+  if (triplet_flag)
+  {
+    int* ran = ran_.mutable_cpu_data(); 
+    for (int m = 0; m < M_; m++)
+      ran[m] = caffe_rng_rand() % int(10); 
+    Set_weight_gpu<Dtype><<<CAFFE_GET_BLOCKS(M_),
+      CAFFE_CUDA_NUM_THREADS>>>(M_,K_,m_weight,bottom_data,label,ran_.gpu_data()); 
+    
+    Set_weight_diff_gpu<Dtype><<<CAFFE_GET_BLOCKS(N_),
+      CAFFE_CUDA_NUM_THREADS>>>(N_, K_,
+                                m_weight_diff);
+  }
+    else
+  {
+    caffe_gpu_gemm<Dtype>(CblasTrans, CblasNoTrans, N_, K_, M_, (Dtype)1.,
+      top_diff, bottom_data, (Dtype)1., this->blobs_[0]->mutable_gpu_diff());
+  }
+  }
+  if (propagate_down[0]){
+  if (semihard_flag)
+  {
+    Set_semihard_gpu<Dtype><<<CAFFE_GET_BLOCKS(M_),
+      CAFFE_CUDA_NUM_THREADS>>>(M_,N_,K_,bottom_diff,top_data,margin_top_data_.gpu_data(),label,hard_flag);
+  }
   }
 }
 

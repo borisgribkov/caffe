@@ -1486,4 +1486,6 @@ message MarginInnerProductParameter {
   optional float power = 7 [default = 1];
   optional int32 iteration = 8 [default = 0];
   optional float lambda_min = 9 [default = 0];
+  optional bool triplet = 10 [default = false];
+  optional bool semihard = 11 [default = false];
 }

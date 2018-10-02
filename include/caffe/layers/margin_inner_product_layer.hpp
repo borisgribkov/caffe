@@ -59,9 +59,13 @@ class MarginInnerProductLayer : public Layer<Dtype> {
   Blob<Dtype> sign_3_; // sign_3 = sign_0 * sign(2 * cos_theta_quadratic_ - 1)
   Blob<Dtype> sign_4_; // sign_4 = 2 * sign_0 + sign_3 - 3
   Blob<Dtype> cos_theta_quartic_;
+  
+  Blob<Dtype> margin_top_data_; 
+  Blob<int> ran_; 
 
   int iter_;
   Dtype lambda_;
+  //bool triplet_flag; 
 
 };
 
