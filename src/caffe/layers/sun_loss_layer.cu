@@ -43,11 +43,11 @@ void SunLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   caffe_gpu_set(K_, Dtype(0), s_normalized_.mutable_gpu_data());
   caffe_gpu_set(M_, Dtype(0), cos_distance_.mutable_gpu_data());
   for (int i = 0; i < M_; ++i) {
-    caffe_gpu_add(K_, s_normalized_.gpu_data(), bottom[0]->gpu_data() + i * K_, s_normalized_.mutable_gpu_data());
+    caffe_gpu_add(K_, s_normalized_.gpu_data(), bottom[1]->gpu_data() + i * K_, s_normalized_.mutable_gpu_data());
   }
   /*kernel_compute_center<Dtype><<<CAFFE_GET_BLOCKS(K_), 
       CAFFE_CUDA_NUM_THREADS>>>(K_, K_, M_,
-        bottom[0]->gpu_data(),
+        bottom[1]->gpu_data(),
         s_normalized_.mutable_gpu_data());
   */
   caffe_gpu_scale(K_, Dtype(1) / M_, s_normalized_.gpu_data(), s_normalized_.mutable_gpu_data());

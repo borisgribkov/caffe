@@ -33,10 +33,11 @@ template <typename Dtype>
 void SunLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const Dtype* bottom_data = bottom[0]->cpu_data();
+  const Dtype* orig_data = bottom[1]->cpu_data();
   Dtype loss = Dtype(0);
   caffe_set(K_, Dtype(0), s_normalized_.mutable_cpu_data());
   for (int i = 0; i < M_; i++) {
-    caffe_add(K_, s_normalized_.cpu_data(), bottom_data + i * K_, s_normalized_.mutable_cpu_data());
+    caffe_add(K_, s_normalized_.cpu_data(), orig_data + i * K_, s_normalized_.mutable_cpu_data());
   }
   caffe_scal<Dtype>(K_, Dtype(1) / M_, s_normalized_.mutable_cpu_data());
   Dtype s_norm = caffe_cpu_dot(K_, s_normalized_.cpu_data(), s_normalized_.cpu_data());

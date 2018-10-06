@@ -57,6 +57,7 @@ void PlanetLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     const vector<Blob<Dtype>*>& top) {
   const Dtype* bottom_data = bottom[0]->cpu_data();
   const Dtype* label = bottom[1]->cpu_data();
+  const Dtype* orig_data = bottom[2]->cpu_data();
   const Dtype* p = this->blobs_[0]->cpu_data();
   Dtype* p_mutable = this->blobs_[0]->mutable_cpu_data();
   Dtype cos_sum = Dtype(0);
@@ -69,13 +70,13 @@ void PlanetLossLayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     cos_distance_.mutable_cpu_data()[i] = caffe_cpu_dot(K_, bottom_data + i * K_, p_normalized_.cpu_data() + i * K_);
     cos_sum += cos_distance_.mutable_cpu_data()[i];
     p_update_cnt_.mutable_cpu_data()[label_value] += Dtype(1);
-    caffe_copy(K_, p_normalized_.cpu_data() + i * K_, p_mutable + label_value * K_);
+    //caffe_copy(K_, p_normalized_.cpu_data() + i * K_, p_mutable + label_value * K_);
   }
   cos_sum /= M_;
   top[0]->mutable_cpu_data()[0] = Dtype(1) - cos_sum;
   for (int i = 0; i < M_; ++i) {
     const int label_value = static_cast<int>(label[i]);
-    caffe_axpy(K_, alpha_/p_update_cnt_.cpu_data()[label_value], bottom_data + i * K_, p_mutable + label_value * K_);
+    caffe_axpy(K_, alpha_/p_update_cnt_.cpu_data()[label_value], orig_data + i * K_, p_mutable + label_value * K_);
   }
 }
 

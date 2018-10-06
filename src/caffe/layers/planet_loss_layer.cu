@@ -24,7 +24,7 @@ __global__ void kernel_forward(const int nthreads, const int K,
     }
     for (int d = 0; d < K; ++d) {
       p_norm[index * K + d] = p[label_value * K + d] / sqrt(dot + epsilon);
-      p[label_value * K + d] = p_norm[index * K + d];
+      //p[label_value * K + d] = p_norm[index * K + d];
       cos_distance[index] += p_norm[index * K + d] * bottom[index * K + d];
     }
   }
@@ -78,7 +78,7 @@ void PlanetLossLayer<Dtype>::Forward_gpu(const vector<Blob<Dtype>*>& bottom,
   top[0]->mutable_cpu_data()[0] = loss;
   kernel_update_p<Dtype><<<CAFFE_GET_BLOCKS(nthreads), 
       CAFFE_CUDA_NUM_THREADS>>>(nthreads, K_, 
-        bottom[0]->gpu_data(),
+        bottom[2]->gpu_data(),
         bottom[1]->gpu_data(),
         p_update_cnt_.gpu_data(),
         this->blobs_[0]->mutable_gpu_data(), 
