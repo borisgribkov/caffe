@@ -6,6 +6,9 @@
 #include "caffe/layers/neuron_layer.hpp"
 #include "caffe/layers/prelu_layer.hpp"
 
+#include <xmmintrin.h> // Contain the SSE compiler intrinsics
+#include <x86intrin.h>
+
 namespace caffe {
 
 template <typename Dtype>
@@ -78,13 +81,22 @@ void PReLULayer<Dtype>::Forward_cpu(const vector<Blob<Dtype>*>& bottom,
     caffe_copy(count, bottom_data, bottom_memory_.mutable_cpu_data());
   }
 
-  // if channel_shared, channel index in the following computation becomes
-  // always zero.
-  const int div_factor = channel_shared_ ? channels : 1;
-  for (int i = 0; i < count; ++i) {
-    int c = (i / dim) % channels / div_factor;
-    top_data[i] = std::max(bottom_data[i], Dtype(0))
+  float z = 0.f;
+  __m128 z4 = _mm_load1_ps(&z); 
+  for (int c = 0; c < channels; ++c) {
+    __m128 s4 = _mm_load1_ps((float*)&slope_data[c]);
+    int i = 0;
+    for (; i <= dim - 4; i += 4) {
+      __m128 x = _mm_loadu_ps((float*)&bottom_data[i]);
+      __m128 res = _mm_add_ps(_mm_max_ps(x, z4), _mm_mul_ps(s4, _mm_min_ps(x, z4)));
+      _mm_storeu_ps((float*)&top_data[i], res);
+    }
+    for (; i < dim; ++i) {
+      top_data[i] = std::max(bottom_data[i], Dtype(0))
         + slope_data[c] * std::min(bottom_data[i], Dtype(0));
+    } 
+    bottom_data += dim;
+    top_data += dim;
   }
 }
 
